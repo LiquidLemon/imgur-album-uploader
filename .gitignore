@@ -1,0 +1,4 @@
+.mypy_cache/
+secrets.py
+__pycache__
+*.pyc
