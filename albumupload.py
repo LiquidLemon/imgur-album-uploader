@@ -10,8 +10,9 @@ from typing import Any, Dict
 
 
 class ImgurAPIError(Exception):
-    def __init__(self, data):
-        self.data = data
+    def __init__(self, response):
+        self.error = response['data']['error']
+        self.status = response['status']
 
 class ImgurClient:
     MASHAPE_API_ROOT = 'https://imgur-apiv3.p.mashape.com/3/'
@@ -21,7 +22,7 @@ class ImgurClient:
                  mashape_key: str = None) -> None:
         s = requests.Session()
         s.headers.update({
-            'Authorization': f'Client-ID {CLIENT_ID}',
+            'Authorization': f'Client-ID {client_id}',
             'User-agent':  f'Album uploader 0.1',
         })
 
@@ -29,7 +30,7 @@ class ImgurClient:
             s.headers.update({ 'Authorization': f'Bearer {access_token}' })
 
         if mashape_key:
-            s.headers.update({ 'X-Mashape-Key': MASHAPE_KEY })
+            s.headers.update({ 'X-Mashape-Key': mashape_key })
             self.api_root = self.MASHAPE_API_ROOT
         else:
             self.api_root = self.IMGUR_API_ROOT
@@ -37,25 +38,41 @@ class ImgurClient:
         self.session = s
 
     def upload_album(self, directory):
+        album = None
         try:
             album = self._post('album')
-            album_id = album['id']
-
-            dir_path = Path(directory)
-            files = os.listdir(dir_path)
-            files.sort()
-
-            for name in files:
-                path = dir_path.joinpath(name)
-                with path.open('rb') as image:
-                    data = { 'album': album_id, 'type': 'binary' }
-                    files = { 'image': image }
-                    image = self._post('image', data=data, files=files)
-                print(f'uploaded {path}')
         except ImgurAPIError as e:
             print('Unexpected error:')
-            print(e.data.error)
+            print(e.data['error'])
             sys.exit(1)
+
+        album_id = album['id']
+
+        dir_path = Path(directory)
+        files = os.listdir(dir_path)
+        files.sort()
+        n = len(files)
+
+        for i, name in enumerate(files):
+            path = dir_path.joinpath(name)
+            print('\033K', end='')
+            print(f'Uploading {path} ({i+1}/{n})', end='\r')
+            try:
+                self.upload_image(path, album=album_id)
+            except ImgurAPIError as e:
+                print(f"Unexpected error encountered while uploading '{path}':")
+                print(e.data['error'])
+                sys.exit(1)
+        print(f"Uploading '{dir_path}' complete")
+        print(f'See it at {album["link"]}')
+
+    def upload_image(self, path, **kwargs):
+        data = kwargs
+        data['type'] = 'binary'
+
+        with path.open('rb') as image:
+            files = { 'image': image }
+            return self._post('image', data=data, files=files)
 
     def _get(self, endpoint, **kwargs):
         return self._request('get', endpoint, **kwargs)
@@ -70,7 +87,7 @@ class ImgurClient:
 
         body = json.loads(response.text)
         if not body['success']:
-            raise ImgurAPIError(body['data'])
+            raise ImgurAPIError(body)
 
         return body['data']
 
