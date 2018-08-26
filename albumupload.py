@@ -3,24 +3,34 @@ import os
 import sys
 import requests
 import base64
-from ptpython.repl import embed
 import json
 from pathlib import Path
 from time import sleep
+from typing import String
 
 from secrets import *
 
-API_ROOT = 'https://imgur-apiv3.p.mashape.com/3/'
+MASHAPE_API_ROOT = 'https://imgur-apiv3.p.mashape.com/3/'
+IMGUR_API_ROOT = 'https://api.imgur.com/3/'
 
-class Client:
-    def __init__(self):
+class ImgurClient:
+    def __init__(self, client_id: String, access_token: String = None,
+                 mashape_key: String = None) -> None:
         s = requests.Session()
         s.headers.update({
-            'X-Mashape-Key': MASHAPE_KEY,
             'Authorization': f'Client-ID {CLIENT_ID}',
-            'Authorization': f'Bearer {ACCESS_TOKEN}',
             'User-agent':  f'Album uploader 0.1',
         })
+
+        if access_token:
+            s.headers.update({ 'Authorization': f'Bearer {access_token}' })
+
+        if mashape_key:
+            s.headers.update({ 'X-Mashape-Key': MASHAPE_KEY })
+            self.api_root = MASHAPE_API_ROOT
+        else:
+            self.api_root = IMGUR_API_ROOT
+
         self.session = s
 
     def post_album(self, **kwargs):
@@ -63,5 +73,5 @@ if __name__ == '__main__':
         print('specify a directory to upload')
         sys.exit(1)
 
-    client = Client()
+    client = ImgurClient(CLIENT_ID, ACCESS_TOKEN, MASHAPE_KEY)
     client.upload_album(sys.argv[1])
