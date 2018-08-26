@@ -4,6 +4,7 @@ import sys
 import requests
 import base64
 import json
+import argparse
 from pathlib import Path
 from time import sleep
 from typing import Any, Dict
@@ -37,32 +38,32 @@ class ImgurClient:
 
         self.session = s
 
-    def upload_album(self, directory):
-        album = None
-        try:
-            album = self._post('album')
-        except ImgurAPIError as e:
-            print('Unexpected error:')
-            print(e.data['error'])
-            sys.exit(1)
-
-        album_id = album['id']
+    def upload_album(self, directory, album_id=None):
+        if not album_id:
+            try:
+                album = self._post('album')
+            except ImgurAPIError as e:
+                print('Unexpected error while creating album:')
+                print(e.error)
+                sys.exit(1)
+            album_id = album['id']
 
         dir_path = Path(directory)
         files = os.listdir(dir_path)
         files.sort()
         n = len(files)
 
-        for i, name in enumerate(files):
+        for i, name in enumerate(files, 1):
             path = dir_path.joinpath(name)
             print('\033[K', end='') # clear line
-            print(f'Uploading {path} ({i+1}/{n})', end='\r')
+            print(f'Uploading {path} ({i}/{n})', end='\r')
             try:
                 self.upload_image(path, album=album_id)
             except ImgurAPIError as e:
                 print(f"Unexpected error encountered while uploading '{path}':")
-                print(e.data['error'])
+                print(e.error)
                 sys.exit(1)
+        print()
         print(f"Uploading '{dir_path}' complete")
         print(f'See it at https://imgur.com/a/{album_id}')
 
@@ -91,13 +92,38 @@ class ImgurClient:
 
         return body['data']
 
+def load_env(keys):
+    env = {}
+
+    with open('secrets.env', 'r') as secrets:
+        for line in secrets:
+            key, value = line.strip().split('=')
+            env[key] = value
+
+    for key in keys:
+        value = os.getenv(key)
+        if value or not key in env:
+            env[key] = value
+
+    return env
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Upload collections of images to imgur'
+    )
+
+    parser.add_argument('directory', help='a directory of images to upload')
+    parser.add_argument('-a', '--album',
+                        help='an album to upload to')
+
+    args = parser.parse_args()
+    env = load_env(['CLIENT_ID', 'ACCESS_TOKEN', 'MASHAPE_KEY'])
+
+    client = ImgurClient(env['CLIENT_ID'], env['ACCESS_TOKEN'],
+                         env['MASHAPE_KEY'])
+
+    album_id = args.album.lstrip('https://imgur.com/a/')
+    client.upload_album(args.directory, album_id)
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print('specify a directory to upload')
-        sys.exit(1)
-
-    from secrets import *
-
-    client = ImgurClient(CLIENT_ID, ACCESS_TOKEN, MASHAPE_KEY)
-    client.upload_album(sys.argv[1])
+    main()
