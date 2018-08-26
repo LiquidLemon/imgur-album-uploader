@@ -6,16 +6,19 @@ import base64
 import json
 from pathlib import Path
 from time import sleep
-from typing import String
+from typing import Any, Dict
 
-from secrets import *
 
-MASHAPE_API_ROOT = 'https://imgur-apiv3.p.mashape.com/3/'
-IMGUR_API_ROOT = 'https://api.imgur.com/3/'
+class ImgurAPIError(Exception):
+    def __init__(self, data):
+        self.data = data
 
 class ImgurClient:
-    def __init__(self, client_id: String, access_token: String = None,
-                 mashape_key: String = None) -> None:
+    MASHAPE_API_ROOT = 'https://imgur-apiv3.p.mashape.com/3/'
+    IMGUR_API_ROOT = 'https://api.imgur.com/3/'
+
+    def __init__(self, client_id: str, access_token: str = None,
+                 mashape_key: str = None) -> None:
         s = requests.Session()
         s.headers.update({
             'Authorization': f'Client-ID {CLIENT_ID}',
@@ -27,14 +30,11 @@ class ImgurClient:
 
         if mashape_key:
             s.headers.update({ 'X-Mashape-Key': MASHAPE_KEY })
-            self.api_root = MASHAPE_API_ROOT
+            self.api_root = self.MASHAPE_API_ROOT
         else:
-            self.api_root = IMGUR_API_ROOT
+            self.api_root = self.IMGUR_API_ROOT
 
         self.session = s
-
-    def post_album(self, **kwargs):
-        return self._post('album', kwargs)
 
     def upload_image(self, path, album):
         data = base64.encodebytes(path.read_bytes())
@@ -43,35 +43,50 @@ class ImgurClient:
         })
 
     def upload_album(self, directory):
-        files = os.listdir(directory)
-        files.sort()
-        album = self.post_album()
-        if not album['success']:
-            print('failed creating album')
+        try:
+            album = self._post('album')
+            album_id = album['data']['id']
+
+            dir_path = Path(directory)
+            files = os.listdir(dir_path)
+            files.sort()
+
+            for name in files:
+                path = dir_path.joinpath(name)
+                with path.open('rb') as image:
+                    data = { 'album': album_id, 'type': 'binary' }
+                    files = { 'image': image }
+                    image = self._post('image', data=data, files=files)
+                print(f'uploaded {path}')
+        except ImgurAPIError as e:
+            print('Unexpected error:')
+            print(e.data.error)
             sys.exit(1)
-        album_id = album['data']['id']
 
-        for name in files:
-            path = Path(directory).joinpath(name)
-            r = self.upload_image(path, album=album_id)
-            if not r['success']:
-                print(f'failed uploading {path}')
-                sys.exit(1)
-            print(f'uploaded {path}')
+    def _get(self, endpoint, **kwargs):
+        return self._request('get', endpoint, **kwargs)
 
-    def _get(self, url):
-        result = self.session.get(API_ROOT + url)
-        return json.loads(result.text)
+    def _post(self, endpoint, **kwargs):
+        return self._request('post', endpoint, **kwargs)
 
-    def _post(self, url, data):
-        result = self.session.post(API_ROOT + url, data=data)
-        return json.loads(result.text)
+    def _request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
+        response = self.session.request(
+            method.upper(), self.api_root + endpoint, **kwargs
+        )
+
+        body = json.loads(response.text)
+        if not body['success']:
+            raise ImgurAPIError(body['data'])
+
+        return body
 
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print('specify a directory to upload')
         sys.exit(1)
+
+    from secrets import *
 
     client = ImgurClient(CLIENT_ID, ACCESS_TOKEN, MASHAPE_KEY)
     client.upload_album(sys.argv[1])
