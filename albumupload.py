@@ -95,10 +95,12 @@ class ImgurClient:
 def load_env(keys):
     env = {}
 
-    with open('secrets.env', 'r') as secrets:
-        for line in secrets:
-            key, value = line.strip().split('=')
-            env[key] = value
+    secrets_path = Path('secrets.env')
+    if secrets_path.is_file():
+        with secrets_path.open('r') as secrets:
+            for line in secrets:
+                key, value = line.strip().split('=')
+                env[key] = value
 
     for key in keys:
         value = os.getenv(key)
