@@ -55,7 +55,7 @@ class ImgurClient:
 
         for i, name in enumerate(files):
             path = dir_path.joinpath(name)
-            print('\033K', end='')
+            print('\033[K', end='') # clear line
             print(f'Uploading {path} ({i+1}/{n})', end='\r')
             try:
                 self.upload_image(path, album=album_id)
@@ -64,7 +64,7 @@ class ImgurClient:
                 print(e.data['error'])
                 sys.exit(1)
         print(f"Uploading '{dir_path}' complete")
-        print(f'See it at {album["link"]}')
+        print(f'See it at https://imgur.com/a/{album_id}')
 
     def upload_image(self, path, **kwargs):
         data = kwargs
