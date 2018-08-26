@@ -39,7 +39,7 @@ class ImgurClient:
     def upload_album(self, directory):
         try:
             album = self._post('album')
-            album_id = album['data']['id']
+            album_id = album['id']
 
             dir_path = Path(directory)
             files = os.listdir(dir_path)
@@ -72,7 +72,7 @@ class ImgurClient:
         if not body['success']:
             raise ImgurAPIError(body['data'])
 
-        return body
+        return body['data']
 
 
 if __name__ == '__main__':
