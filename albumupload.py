@@ -36,12 +36,6 @@ class ImgurClient:
 
         self.session = s
 
-    def upload_image(self, path, album):
-        data = base64.encodebytes(path.read_bytes())
-        return self._post('image', {
-            'image': data, 'album': album, 'type': 'base64'
-        })
-
     def upload_album(self, directory):
         try:
             album = self._post('album')
